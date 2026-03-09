@@ -43,6 +43,7 @@
       --node-near-lift: -5px;
       --node-near-glow-alpha: 0.34;
       --node-near-ring-alpha: 0.7;
+      --mobile-scroll-room: 96px;
     }
 
     @supports (height: 100svh) {
@@ -75,6 +76,15 @@
       width: var(--app-width);
       height: var(--app-height);
       min-height: var(--app-height);
+    }
+
+    /* App shell isolates the game canvas while outer body can scroll on mobile. */
+    #app-shell {
+      position: relative;
+      width: var(--app-width);
+      height: var(--app-height);
+      min-height: var(--app-height);
+      overflow: hidden;
     }
     .font-mono { font-family: 'Space Mono', monospace; }
 
@@ -232,6 +242,19 @@
 
     /* Landscape-first phone polish: balanced spacing, tighter HUD, safer controls. */
     @media (max-width: 1024px) and (pointer: coarse) {
+      /* Native page scroll host: enables browser address bar collapse by real vertical scroll. */
+      body {
+        height: auto;
+        min-height: calc(var(--app-height) + var(--mobile-scroll-room));
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior-y: auto;
+      }
+      #app-shell {
+        position: sticky;
+        top: 0;
+      }
+
       #world-layer::before {
         content: '';
         position: absolute;
@@ -634,6 +657,7 @@
   </style>
 </head>
   <body class="w-full bg-[#020202] overflow-hidden relative select-none text-slate-200 touch-action-pan-y">
+  <div id="app-shell">
   <!-- Mobile portrait overlay -->
   <div id="orientation-overlay" class="hide absolute inset-0 z-[450] bg-[#020202]/95 backdrop-blur-md flex items-center justify-center p-6">
     <div class="rotate-card w-full max-w-xl border border-cyan-500/35 bg-black/80 rounded-2xl p-8 text-center font-mono shadow-[0_0_40px_rgba(34,211,238,0.12)] relative overflow-hidden">
@@ -821,6 +845,7 @@
         <!-- Rendered dynamically -->
       </div>
     </div>
+  </div>
   </div>
 
   <!-- ================= APP LOGIC (Vanilla JS) ================= -->
@@ -1127,28 +1152,6 @@
       root.style.setProperty('--vv-offset-left', `${offsetLeft}px`);
     }
 
-    // Mobile browsers do not allow forced hiding of address bars in normal tabs.
-    // This tries immersive mode on user gesture; fallback remains dynamic viewport compensation.
-    async function enterImmersiveMode() {
-      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-      if (isStandalone) return;
-
-      try {
-        const docEl = document.documentElement;
-        if (docEl.requestFullscreen && !document.fullscreenElement) {
-          await docEl.requestFullscreen();
-        }
-      } catch (_) {
-        // Ignore; many mobile browsers restrict fullscreen for regular pages.
-      }
-
-      try {
-        window.scrollTo({ top: 1, left: 0, behavior: 'instant' });
-      } catch (_) {
-        window.scrollTo(0, 1);
-      }
-    }
-
     function scheduleViewportSync() {
       if (viewportSyncQueued) return;
       viewportSyncQueued = true;
@@ -1448,7 +1451,6 @@
       requestAnimationFrame(gameLoop);
     }
     function startGame() {
-      enterImmersiveMode();
       DOM.startScreen.classList.add('hide');
       DOM.gameContainer.classList.remove('hide');
       GameState.status = 'playing';
