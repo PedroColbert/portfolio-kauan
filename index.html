@@ -43,7 +43,7 @@
       --node-near-lift: -5px;
       --node-near-glow-alpha: 0.34;
       --node-near-ring-alpha: 0.7;
-      --mobile-scroll-room: 96px;
+      --mobile-scroll-room: 220px;
     }
 
     @supports (height: 100svh) {
@@ -85,6 +85,13 @@
       height: var(--app-height);
       min-height: var(--app-height);
       overflow: hidden;
+      touch-action: pan-y;
+    }
+
+    #mobile-scroll-spacer {
+      display: none;
+      height: 0;
+      pointer-events: none;
     }
     .font-mono { font-family: 'Space Mono', monospace; }
 
@@ -253,6 +260,11 @@
       #app-shell {
         position: sticky;
         top: 0;
+      }
+      /* Real scrollable tail so browser chrome can collapse naturally on vertical gesture. */
+      #mobile-scroll-spacer {
+        display: block;
+        height: var(--mobile-scroll-room);
       }
 
       #world-layer::before {
@@ -847,6 +859,7 @@
     </div>
   </div>
   </div>
+  <div id="mobile-scroll-spacer" aria-hidden="true"></div>
 
   <!-- ================= APP LOGIC (Vanilla JS) ================= -->
   <script>
@@ -1034,7 +1047,8 @@
       notificationCount: 0,
       scroll: {
         velocity: 0,
-        touchLastX: null
+        touchLastX: null,
+        touchLastY: null
       },
       keyboard: {
         velocity: 0
@@ -1375,21 +1389,39 @@
       const onTouchStart = (e) => {
         if (GameState.activeModal || GameState.status !== 'playing' || GameState.mobile.showLandscapeOverlay) return;
         GameState.scroll.touchLastX = e.touches[0]?.clientX ?? null;
+        GameState.scroll.touchLastY = e.touches[0]?.clientY ?? null;
       };
 
       const onTouchMove = (e) => {
         if (GameState.activeModal || GameState.status !== 'playing' || GameState.mobile.showLandscapeOverlay) return;
-        if (GameState.scroll.touchLastX === null) return;
+        if (GameState.scroll.touchLastX === null || GameState.scroll.touchLastY === null) return;
         const currentX = e.touches[0]?.clientX;
+        const currentY = e.touches[0]?.clientY;
         if (typeof currentX !== 'number') return;
+        if (typeof currentY !== 'number') return;
+
+        const dy = GameState.scroll.touchLastY - currentY;
+        const dxRaw = GameState.scroll.touchLastX - currentX;
+
+        // Let browser own vertical gestures so URL bar can collapse naturally.
+        if (Math.abs(dy) > Math.abs(dxRaw) * 1.1 && Math.abs(dy) > 3) {
+          GameState.scroll.touchLastX = currentX;
+          GameState.scroll.touchLastY = currentY;
+          return;
+        }
+
         const dx = GameState.scroll.touchLastX - currentX;
         GameState.scroll.touchLastX = currentX;
+        GameState.scroll.touchLastY = currentY;
         const clampedDx = Math.max(-60, Math.min(60, dx));
         GameState.scroll.velocity += clampedDx * 35 * SCROLL_CONFIG.touchStepScale;
         GameState.scroll.velocity = Math.max(-SCROLL_CONFIG.maxScrollVelocity, Math.min(SCROLL_CONFIG.maxScrollVelocity, GameState.scroll.velocity));
       };
 
-      const onTouchEnd = () => { GameState.scroll.touchLastX = null; };
+      const onTouchEnd = () => {
+        GameState.scroll.touchLastX = null;
+        GameState.scroll.touchLastY = null;
+      };
 
       // Touch controls for mobile landscape.
       const bindHoldButton = (button, onPress, onRelease) => {
@@ -1668,6 +1700,7 @@
         GameState.keys.right = false;
         GameState.keyboard.velocity = 0;
         GameState.scroll.touchLastX = null;
+        GameState.scroll.touchLastY = null;
         GameState.lastTime = time;
         requestAnimationFrame(gameLoop);
         return;
