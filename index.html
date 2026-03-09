@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>Kauan Kamillus | Security Specialist</title>
   
   <!-- Tailwind CSS -->
@@ -23,7 +26,9 @@
       --safe-right: env(safe-area-inset-right, 0px);
       --safe-bottom: env(safe-area-inset-bottom, 0px);
       --safe-left: env(safe-area-inset-left, 0px);
-      --hud-top-pad: calc(1.5rem + var(--safe-top));
+      --vv-offset-top: 0px;
+      --vv-offset-left: 0px;
+      --hud-top-pad: calc(1.5rem + var(--safe-top) + var(--vv-offset-top));
       --hud-inline-pad: max(1rem, var(--safe-left), var(--safe-right));
       --controls-bottom-pad: calc(0.75rem + var(--safe-bottom));
       --overlay-pad-top: max(0.75rem, var(--safe-top));
@@ -587,7 +592,7 @@
     #thank-you-screen,
     #orientation-overlay {
       min-height: min(var(--app-height), var(--app-height-small));
-      padding-top: max(1rem, var(--safe-top));
+      padding-top: calc(max(1rem, var(--safe-top)) + var(--vv-offset-top));
       padding-bottom: max(1rem, var(--safe-bottom));
       padding-left: max(1rem, var(--safe-left));
       padding-right: max(1rem, var(--safe-right));
@@ -1110,11 +1115,38 @@
     function syncViewportCSSVars() {
       const { width, height } = getViewportMetrics();
       const innerHeight = Math.round(window.innerHeight);
+      const vv = window.visualViewport;
+      const offsetTop = Math.max(0, Math.round(vv?.offsetTop || 0));
+      const offsetLeft = Math.max(0, Math.round(vv?.offsetLeft || 0));
       const root = document.documentElement;
       root.style.setProperty('--app-width', `${width}px`);
       root.style.setProperty('--app-height', `${height}px`);
       root.style.setProperty('--app-height-small', `${Math.min(height, innerHeight)}px`);
       root.style.setProperty('--app-height-large', `${Math.max(height, innerHeight)}px`);
+      root.style.setProperty('--vv-offset-top', `${offsetTop}px`);
+      root.style.setProperty('--vv-offset-left', `${offsetLeft}px`);
+    }
+
+    // Mobile browsers do not allow forced hiding of address bars in normal tabs.
+    // This tries immersive mode on user gesture; fallback remains dynamic viewport compensation.
+    async function enterImmersiveMode() {
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+      if (isStandalone) return;
+
+      try {
+        const docEl = document.documentElement;
+        if (docEl.requestFullscreen && !document.fullscreenElement) {
+          await docEl.requestFullscreen();
+        }
+      } catch (_) {
+        // Ignore; many mobile browsers restrict fullscreen for regular pages.
+      }
+
+      try {
+        window.scrollTo({ top: 1, left: 0, behavior: 'instant' });
+      } catch (_) {
+        window.scrollTo(0, 1);
+      }
     }
 
     function scheduleViewportSync() {
@@ -1416,6 +1448,7 @@
       requestAnimationFrame(gameLoop);
     }
     function startGame() {
+      enterImmersiveMode();
       DOM.startScreen.classList.add('hide');
       DOM.gameContainer.classList.remove('hide');
       GameState.status = 'playing';
